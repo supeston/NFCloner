@@ -222,14 +222,7 @@ fun SettingsScreen(
                     Switch(
                         checked = settings.emvScanEnabled,
                         onCheckedChange = { viewModel.updateEmvScanEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = Color(0xFFC9D1D9),
-                            uncheckedTrackColor = Color(0xFF161B22),
-                            uncheckedBorderColor = Color(0xFF484F58)
-                        )
+                        // using default colors
                     )
                 }
             }
@@ -278,14 +271,7 @@ fun SettingsScreen(
                     Switch(
                         checked = settings.transportCardsEnabled,
                         onCheckedChange = { viewModel.updateTransportCardsEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = Color(0xFFC9D1D9),
-                            uncheckedTrackColor = Color(0xFF161B22),
-                            uncheckedBorderColor = Color(0xFF484F58)
-                        )
+                        // using default colors
                     )
                 }
             }

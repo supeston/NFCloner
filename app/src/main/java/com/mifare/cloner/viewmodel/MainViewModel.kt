@@ -161,29 +161,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val isMifare = techList.any { it.contains("MifareClassic", ignoreCase = true) }
 
                     // Priority 1: Transport Cards (Troika, Strelka, Podorozhnik) if enabled
+                    var transportCard: com.mifare.cloner.data.TransportCard? = null
                     if (currentSettings.transportCardsEnabled && isMifare) {
-                        _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение транспортной карты...")) }
                         val transportRes = com.mifare.cloner.nfc.TransportCardParser.readTransportCard(tag)
-                        when (transportRes) {
-                            is com.mifare.cloner.nfc.TransportCardReadResult.Success -> {
-                                _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
-                                _uiState.update {
-                                    it.copy(
-                                        clonerState = ClonerOperationState.TransportCardScanned(transportRes.card),
-                                        feedbackMessage = "карта «${transportRes.card.type.title}» прочитана"
-                                    )
-                                }
-                                return@launch
-                            }
-                            is com.mifare.cloner.nfc.TransportCardReadResult.Failure,
-                            is com.mifare.cloner.nfc.TransportCardReadResult.NotATransportCard -> {
-                                // Fallback to EMV or normal Mifare Classic cloning
-                            }
+                        if (transportRes is com.mifare.cloner.nfc.TransportCardReadResult.Success) {
+                            transportCard = transportRes.card
                         }
                     }
 
                     // Priority 2: EMV Bank Cards if enabled
-                    if (isIsoDep) {
+                    if (isIsoDep && transportCard == null) {
                         _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение банковской карты...")) }
                         val emvRes = com.mifare.cloner.nfc.EmvCardReader.readEmvCard(tag)
                         when (emvRes) {
@@ -209,7 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
 
-                    _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение оригинала...")) }
+                    _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение...")) }
 
                     val res = MifareGen2Cloner.readOriginalTag(
                         tag = tag,
@@ -218,21 +205,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         keysList = currentSettings.keysList
                     )
 
-                    when (res) {
-                        is ReadResult.Success -> {
-                            storage.saveDump(res.dump)
-                            _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
-                            _uiState.update {
-                                it.copy(
-                                    clonerState = ClonerOperationState.ReadyToWrite(res.dump),
-                                    feedbackMessage = "дамп сохранен в базу"
-                                )
-                            }
+                    if (res is ReadResult.Success) {
+                        storage.saveDump(res.dump)
+                    }
+
+                    if (transportCard != null) {
+                        _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
+                        _uiState.update {
+                            it.copy(
+                                clonerState = ClonerOperationState.TransportCardScanned(transportCard),
+                                feedbackMessage = "карта «${transportCard.type.title}» прочитана" + if (res is ReadResult.Success) " и сохранена в дампы" else ""
+                            )
                         }
-                        is ReadResult.Failure -> {
-                            _feedbackEvents.emit(FeedbackType.ERROR)
-                            _uiState.update {
-                                it.copy(clonerState = ClonerOperationState.OperationError(res.message))
+                    } else {
+                        when (res) {
+                            is ReadResult.Success -> {
+                                _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
+                                _uiState.update {
+                                    it.copy(
+                                        clonerState = ClonerOperationState.ReadyToWrite(res.dump),
+                                        feedbackMessage = "дамп сохранен в базу"
+                                    )
+                                }
+                            }
+                            is ReadResult.Failure -> {
+                                _feedbackEvents.emit(FeedbackType.ERROR)
+                                _uiState.update {
+                                    it.copy(clonerState = ClonerOperationState.OperationError(res.message))
+                                }
                             }
                         }
                     }

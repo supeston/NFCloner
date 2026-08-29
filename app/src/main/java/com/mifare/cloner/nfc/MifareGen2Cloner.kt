@@ -34,7 +34,12 @@ object MifareGen2Cloner {
         "A0B0C0D0E0F0",
         "A1B2C3D4E5F6",
         "4D3A99C351DD",
-        "1A982C7E459A"
+        "1A982C7E459A",
+        // Transport keys for dumping
+        "5A362948710E", "48710E5A3629", "710E5A362948", "2948710E5A36", "362948710E5A", "0E5A36294871",
+        "534341535031", "435341535031",
+        "A73F5DC1D333", "1A9C26E3A8B5", "E35173494A81",
+        "112233445566", "223344556677"
     )
 
     fun readOriginalTag(

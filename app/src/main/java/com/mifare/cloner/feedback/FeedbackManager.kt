@@ -1,4 +1,4 @@
-﻿package com.mifare.cloner.feedback
+package com.mifare.cloner.feedback
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -55,15 +55,11 @@ class FeedbackManager(private val context: Context) {
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val attrs = VibrationAttributes.Builder()
-                        .setUsage(VibrationAttributes.USAGE_TOUCH)
+                        .setUsage(VibrationAttributes.USAGE_HARDWARE_FEEDBACK)
                         .build()
                     vib.vibrate(effect, attrs)
                 } else {
-                    val audioAttrs = AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .build()
-                    vib.vibrate(effect, audioAttrs)
+                    vib.vibrate(effect)
                 }
             } else {
                 @Suppress("DEPRECATION")
