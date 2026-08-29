@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -220,7 +221,15 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = settings.emvScanEnabled,
-                        onCheckedChange = { viewModel.updateEmvScanEnabled(it) }
+                        onCheckedChange = { viewModel.updateEmvScanEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = Color(0xFFC9D1D9),
+                            uncheckedTrackColor = Color(0xFF161B22),
+                            uncheckedBorderColor = Color(0xFF484F58)
+                        )
                     )
                 }
             }
@@ -268,7 +277,15 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
                         checked = settings.transportCardsEnabled,
-                        onCheckedChange = { viewModel.updateTransportCardsEnabled(it) }
+                        onCheckedChange = { viewModel.updateTransportCardsEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = Color(0xFFC9D1D9),
+                            uncheckedTrackColor = Color(0xFF161B22),
+                            uncheckedBorderColor = Color(0xFF484F58)
+                        )
                     )
                 }
             }
