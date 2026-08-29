@@ -3,6 +3,7 @@
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.mifare.cloner.BuildConfig
 import org.json.JSONArray
 import java.io.BufferedInputStream
 import java.io.BufferedReader
@@ -12,7 +13,8 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
-const val CURRENT_APP_VERSION = "1.2.0"
+val CURRENT_APP_VERSION: String
+    get() = BuildConfig.VERSION_NAME
 
 data class ReleaseHistoryItem(
     val tagName: String,
@@ -93,30 +95,43 @@ object ReleaseRepository {
         downloadUrl: String,
         onProgress: (Float, Long, Long) -> Unit
     ): File {
-        var targetUrl = downloadUrl
-        var connection = URL(targetUrl).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "NFCloner-App")
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        connection.instanceFollowRedirects = true
+        var currentUrl = downloadUrl
+        var connection: HttpURLConnection? = null
+        var redirects = 0
+        val maxRedirects = 6
 
-        var status = connection.responseCode
-        if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308) {
-            val newUrl = connection.getHeaderField("Location")
-            if (!newUrl.isNullOrBlank()) {
+        while (redirects < maxRedirects) {
+            val url = URL(currentUrl)
+            connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("User-Agent", "NFCloner-App")
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.instanceFollowRedirects = false
+
+            val status = connection.responseCode
+            if (status == HttpURLConnection.HTTP_MOVED_PERM ||
+                status == HttpURLConnection.HTTP_MOVED_TEMP ||
+                status == HttpURLConnection.HTTP_SEE_OTHER ||
+                status == 307 || status == 308
+            ) {
+                val newUrl = connection.getHeaderField("Location")
                 connection.disconnect()
-                connection = URL(newUrl).openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("User-Agent", "NFCloner-App")
-                connection.connectTimeout = 15000
-                connection.readTimeout = 15000
-                status = connection.responseCode
+                if (newUrl.isNullOrBlank()) {
+                    throw RuntimeException("Ошибка редиректа: пустой Location")
+                }
+                currentUrl = newUrl
+                redirects++
+            } else if (status == HttpURLConnection.HTTP_OK) {
+                break
+            } else {
+                connection.disconnect()
+                throw RuntimeException("Ошибка сервера: $status")
             }
         }
 
-        if (status != HttpURLConnection.HTTP_OK) {
-            throw RuntimeException("Ошибка сервера: $status")
+        if (connection == null || connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw RuntimeException("Не удалось установить соединение для скачивания")
         }
 
         val fileLength = connection.contentLength.toLong()
