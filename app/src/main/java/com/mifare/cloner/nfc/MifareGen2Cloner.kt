@@ -46,7 +46,8 @@ object MifareGen2Cloner {
         tag: Tag,
         scanMode: ScanMode,
         customSector: Int,
-        keysList: List<String>
+        keysList: List<String>,
+        checkTransportSectors: Boolean = false
     ): ReadResult {
         val mifare = MifareClassic.get(tag)
         if (mifare == null) {
@@ -77,10 +78,16 @@ object MifareGen2Cloner {
             val sectorKeysMap = HashMap<Int, String>()
             var primaryKeyUsedHex = "FFFFFFFFFFFF"
 
-            val sectorsToRead = when (scanMode) {
+            val baseSectors = when (scanMode) {
                 ScanMode.SECTOR_0 -> listOf(0)
                 ScanMode.CUSTOM_SECTOR -> listOf(customSector.coerceIn(0, mifare.sectorCount - 1))
                 ScanMode.FULL_DUMP -> (0 until mifare.sectorCount).toList()
+            }
+
+            val sectorsToRead = if (checkTransportSectors && scanMode != ScanMode.FULL_DUMP) {
+                (baseSectors + listOf(4, 7, 8, 11)).filter { it < mifare.sectorCount }.distinct().sorted()
+            } else {
+                baseSectors
             }
 
             for (sector in sectorsToRead) {
@@ -106,8 +113,10 @@ object MifareGen2Cloner {
                 }
 
                 if (!authenticated) {
-                    if (scanMode == ScanMode.SECTOR_0) {
+                    if (scanMode == ScanMode.SECTOR_0 && sector == 0) {
                         return ReadResult.Failure("Не удалось подобрать ключ для Сектора 0. Добавьте нужный ключ в Настройках.")
+                    } else if (scanMode == ScanMode.CUSTOM_SECTOR && sector == customSector) {
+                        return ReadResult.Failure("Не удалось подобрать ключ для Сектора $customSector")
                     } else {
                         continue
                     }

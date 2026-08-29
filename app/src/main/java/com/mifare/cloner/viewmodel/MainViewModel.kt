@@ -160,17 +160,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val isIsoDep = currentSettings.emvScanEnabled && techList.any { it.contains("IsoDep", ignoreCase = true) }
                     val isMifare = techList.any { it.contains("MifareClassic", ignoreCase = true) }
 
-                    // Priority 1: Transport Cards (Troika, Strelka, Podorozhnik) if enabled
-                    var transportCard: com.mifare.cloner.data.TransportCard? = null
-                    if (currentSettings.transportCardsEnabled && isMifare) {
-                        val transportRes = com.mifare.cloner.nfc.TransportCardParser.readTransportCard(tag)
-                        if (transportRes is com.mifare.cloner.nfc.TransportCardReadResult.Success) {
-                            transportCard = transportRes.card
-                        }
-                    }
-
-                    // Priority 2: EMV Bank Cards if enabled
-                    if (isIsoDep && transportCard == null) {
+                    // Priority 1: EMV Bank Cards (if IsoDep supported & enabled)
+                    if (isIsoDep) {
                         _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение банковской карты...")) }
                         val emvRes = com.mifare.cloner.nfc.EmvCardReader.readEmvCard(tag)
                         when (emvRes) {
@@ -196,31 +187,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
 
+                    // Priority 2: Mifare Classic / Transport Card (Unified Single Pass)
+                    if (!isMifare) {
+                        _feedbackEvents.emit(FeedbackType.ERROR)
+                        _uiState.update {
+                            it.copy(clonerState = ClonerOperationState.OperationError("метка не поддерживается (требуется MIFARE Classic или EMV)"))
+                        }
+                        return@launch
+                    }
+
                     _uiState.update { it.copy(clonerState = ClonerOperationState.ReadingOriginal("чтение...")) }
 
                     val res = MifareGen2Cloner.readOriginalTag(
                         tag = tag,
                         scanMode = currentSettings.scanMode,
                         customSector = currentSettings.customSector,
-                        keysList = currentSettings.keysList
+                        keysList = currentSettings.keysList,
+                        checkTransportSectors = currentSettings.transportCardsEnabled
                     )
 
-                    if (res is ReadResult.Success) {
-                        storage.saveDump(res.dump)
-                    }
+                    when (res) {
+                        is ReadResult.Success -> {
+                            storage.saveDump(res.dump)
 
-                    if (transportCard != null) {
-                        _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
-                        _uiState.update {
-                            it.copy(
-                                clonerState = ClonerOperationState.TransportCardScanned(transportCard),
-                                feedbackMessage = "карта «${transportCard.type.title}» прочитана" + if (res is ReadResult.Success) " и сохранена в дампы" else ""
-                            )
-                        }
-                    } else {
-                        when (res) {
-                            is ReadResult.Success -> {
-                                _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
+                            var transportCard: com.mifare.cloner.data.TransportCard? = null
+                            if (currentSettings.transportCardsEnabled) {
+                                transportCard = com.mifare.cloner.nfc.TransportCardParser.parseFromDump(res.dump)
+                            }
+
+                            _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
+                            if (transportCard != null) {
+                                _uiState.update {
+                                    it.copy(
+                                        clonerState = ClonerOperationState.TransportCardScanned(transportCard),
+                                        feedbackMessage = "карта «${transportCard.type.title}» прочитана"
+                                    )
+                                }
+                            } else {
                                 _uiState.update {
                                     it.copy(
                                         clonerState = ClonerOperationState.ReadyToWrite(res.dump),
@@ -228,11 +231,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     )
                                 }
                             }
-                            is ReadResult.Failure -> {
-                                _feedbackEvents.emit(FeedbackType.ERROR)
-                                _uiState.update {
-                                    it.copy(clonerState = ClonerOperationState.OperationError(res.message))
-                                }
+                        }
+                        is ReadResult.Failure -> {
+                            _feedbackEvents.emit(FeedbackType.ERROR)
+                            _uiState.update {
+                                it.copy(clonerState = ClonerOperationState.OperationError(res.message))
                             }
                         }
                     }
