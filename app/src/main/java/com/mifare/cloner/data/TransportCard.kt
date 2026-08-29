@@ -1,4 +1,4 @@
-﻿package com.mifare.cloner.data
+package com.mifare.cloner.data
 
 import androidx.compose.ui.graphics.Color
 import java.util.Locale
@@ -11,20 +11,20 @@ enum class TransportCardType(
 ) {
     TROIKA(
         title = "тройка",
-        systemName = "транспортная карта «тройка»",
+        systemName = "тройка",
         city = "москва",
         primaryGradient = listOf(Color(0xFF005B5C), Color(0xFF003032))
     ),
     STRELKA(
         title = "стрелка",
-        systemName = "единая транспортная карта «стрелка»",
-        city = "московская область",
+        systemName = "стрелка",
+        city = "подмосковье",
         primaryGradient = listOf(Color(0xFF195396), Color(0xFF0B2545))
     ),
     PODOROZHNIK(
         title = "подорожник",
-        systemName = "электронный билет «подорожник»",
-        city = "санкт-петербург",
+        systemName = "подорожник",
+        city = "питер",
         primaryGradient = listOf(Color(0xFF1B6B42), Color(0xFF0E3823))
     )
 }

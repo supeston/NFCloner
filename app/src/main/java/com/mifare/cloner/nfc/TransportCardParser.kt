@@ -15,39 +15,20 @@ sealed class TransportCardReadResult {
 
 object TransportCardParser {
 
-    // Troika keys (Moscow)
-    private val TROIKA_KEYS = listOf(
-        byteArrayOf(0xA7.toByte(), 0x3F.toByte(), 0x5D.toByte(), 0xC1.toByte(), 0xD3.toByte(), 0x33.toByte()),
-        byteArrayOf(0x1A.toByte(), 0x9C.toByte(), 0x26.toByte(), 0xE3.toByte(), 0xA8.toByte(), 0xB5.toByte()),
-        byteArrayOf(0xE3.toByte(), 0x51.toByte(), 0x73.toByte(), 0x49.toByte(), 0x4A.toByte(), 0x81.toByte())
-    )
+    // 1. Тройка (Москва)
+    // Sector 7, Key A: A7 3F 5D C1 D3 33
+    private val TROIKA_KEY_A_SEC7 = byteArrayOf(0xA7.toByte(), 0x3F.toByte(), 0x5D.toByte(), 0xC1.toByte(), 0xD3.toByte(), 0x33.toByte())
+    // Sector 8, Key A: 1A 9C 26 E3 A8 B5
+    private val TROIKA_KEY_A_SEC8 = byteArrayOf(0x1A.toByte(), 0x9C.toByte(), 0x26.toByte(), 0xE3.toByte(), 0xA8.toByte(), 0xB5.toByte())
 
-    // Podorozhnik keys (SPb) - rotated permutations & known keys for 1K and 4K
-    private val PODOROZHNIK_KEYS = listOf(
-        byteArrayOf(0x5A.toByte(), 0x36.toByte(), 0x29.toByte(), 0x48.toByte(), 0x71.toByte(), 0x0E.toByte()), // Sec 4 Key A
-        byteArrayOf(0x48.toByte(), 0x71.toByte(), 0x0E.toByte(), 0x5A.toByte(), 0x36.toByte(), 0x29.toByte()), // Sec 5 Key A
-        byteArrayOf(0x71.toByte(), 0x0E.toByte(), 0x5A.toByte(), 0x36.toByte(), 0x29.toByte(), 0x48.toByte()), // Sec 6 Key A
-        byteArrayOf(0x29.toByte(), 0x48.toByte(), 0x71.toByte(), 0x0E.toByte(), 0x5A.toByte(), 0x36.toByte()), // Sec 7 Key A
-        byteArrayOf(0x36.toByte(), 0x29.toByte(), 0x48.toByte(), 0x71.toByte(), 0x0E.toByte(), 0x5A.toByte()), // Sec 8 Key A
-        byteArrayOf(0x0E.toByte(), 0x5A.toByte(), 0x36.toByte(), 0x29.toByte(), 0x48.toByte(), 0x71.toByte()), // Sec 9 Key A
-        byteArrayOf(0x53.toByte(), 0x43.toByte(), 0x41.toByte(), 0x53.toByte(), 0x50.toByte(), 0x31.toByte()), // SCASP1
-        byteArrayOf(0x43.toByte(), 0x53.toByte(), 0x41.toByte(), 0x53.toByte(), 0x50.toByte(), 0x31.toByte()), // CSASP1
-        byteArrayOf(0xB0.toByte(), 0xB1.toByte(), 0xB2.toByte(), 0xB3.toByte(), 0xB4.toByte(), 0xB5.toByte()),
-        byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte())
-    )
+    // 2. Стрелка (Подмосковье)
+    // Sector 11, Key A: 11 22 33 44 55 66
+    private val STRELKA_KEY_A_SEC11 = byteArrayOf(0x11.toByte(), 0x22.toByte(), 0x33.toByte(), 0x44.toByte(), 0x55.toByte(), 0x66.toByte())
 
-    // Strelka keys (MO)
-    private val STRELKA_KEYS = listOf(
-        byteArrayOf(0x11.toByte(), 0x22.toByte(), 0x33.toByte(), 0x44.toByte(), 0x55.toByte(), 0x66.toByte()),
-        byteArrayOf(0x22.toByte(), 0x33.toByte(), 0x44.toByte(), 0x55.toByte(), 0x66.toByte(), 0x77.toByte())
-    )
-
-    // Common standard keys
-    private val STANDARD_KEYS = listOf(
-        byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()),
-        byteArrayOf(0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()),
-        byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
-    )
+    // 3. Подорожник (Питер)
+    // Sector 4, Key A: 5A 36 29 48 71 0E
+    private val PODOROZHNIK_KEY_A_SEC4 = byteArrayOf(0x5A.toByte(), 0x36.toByte(), 0x29.toByte(), 0x48.toByte(), 0x71.toByte(), 0x0E.toByte())
+    private val PODOROZHNIK_KEY_A_ALT = byteArrayOf(0x48.toByte(), 0x71.toByte(), 0x0E.toByte(), 0x5A.toByte(), 0x36.toByte(), 0x29.toByte())
 
     fun readTransportCard(tag: Tag): TransportCardReadResult {
         val mfc = try {
@@ -60,31 +41,32 @@ object TransportCardParser {
 
         try {
             mfc.connect()
-            mfc.timeout = 2000
+            mfc.timeout = 1500
 
-            // 1. Try Podorozhnik first (supports 1K and 4K)
-            val podorozhnikCard = tryReadPodorozhnik(mfc, uidHex)
-            if (podorozhnikCard != null) {
-                return TransportCardReadResult.Success(podorozhnikCard)
+            // 1. Порядок проверки: Тройка (Москва)
+            val troika = tryReadTroika(mfc, uidHex)
+            if (troika != null) {
+                return TransportCardReadResult.Success(troika)
             }
 
-            // 2. Try Troika (Sectors 7 & 8)
-            val troikaCard = tryReadTroika(mfc, uidHex)
-            if (troikaCard != null) {
-                return TransportCardReadResult.Success(troikaCard)
+            // 2. Стрелка (Подмосковье)
+            val strelka = tryReadStrelka(mfc, uidHex)
+            if (strelka != null) {
+                return TransportCardReadResult.Success(strelka)
             }
 
-            // 3. Try Strelka (Sector 11)
-            val strelkaCard = tryReadStrelka(mfc, uidHex)
-            if (strelkaCard != null) {
-                return TransportCardReadResult.Success(strelkaCard)
+            // 3. Подорожник (Питер)
+            val podorozhnik = tryReadPodorozhnik(mfc, uidHex)
+            if (podorozhnik != null) {
+                return TransportCardReadResult.Success(podorozhnik)
             }
 
+            // Обычная метка или болванка
             return TransportCardReadResult.NotATransportCard
         } catch (e: IOException) {
-            return TransportCardReadResult.Failure("Ошибка связи с картой: ${e.localizedMessage}")
+            return TransportCardReadResult.Failure("ошибка связи: ${e.localizedMessage}")
         } catch (e: Exception) {
-            return TransportCardReadResult.Failure("Ошибка чтения карты: ${e.localizedMessage}")
+            return TransportCardReadResult.Failure("ошибка чтения: ${e.localizedMessage}")
         } finally {
             try {
                 mfc.close()
@@ -92,145 +74,81 @@ object TransportCardParser {
         }
     }
 
-    private fun authSector(mfc: MifareClassic, sector: Int, key: ByteArray): Boolean {
-        try {
-            if (mfc.authenticateSectorWithKeyA(sector, key)) return true
-        } catch (_: Exception) {}
-        try {
-            if (mfc.authenticateSectorWithKeyB(sector, key)) return true
-        } catch (_: Exception) {}
+    private fun isBlockEmptyOrDummy(data: ByteArray?): Boolean {
+        if (data == null || data.size < 16) return true
+        val first = data[0]
+        if (data.all { it == first } && (first == 0.toByte() || first == 0xFF.toByte())) {
+            return true
+        }
         return false
-    }
-
-    private fun tryReadPodorozhnik(mfc: MifareClassic, uidHex: String): TransportCard? {
-        val candidateSectors = listOf(4, 5, 6, 7, 8, 3, 2, 1).filter { it < mfc.sectorCount }
-        val readSectors = mutableListOf<Int>()
-        var foundPodorozhnik = false
-        var balanceRubles = 0.0
-        var cardNumber = ""
-
-        val allKeys = PODOROZHNIK_KEYS + STANDARD_KEYS
-
-        for (sec in candidateSectors) {
-            var authed = false
-            for (k in allKeys) {
-                if (authSector(mfc, sec, k)) {
-                    authed = true
-                    if (PODOROZHNIK_KEYS.any { it.contentEquals(k) }) {
-                        foundPodorozhnik = true
-                    }
-                    break
-                }
-            }
-
-            if (authed) {
-                readSectors.add(sec)
-                val firstBlock = mfc.sectorToBlock(sec)
-                val blockCount = mfc.getBlockCountInSector(sec)
-
-                for (b in 0 until minOf(blockCount, 3)) {
-                    val blockIndex = firstBlock + b
-                    val data = try { mfc.readBlock(blockIndex) } catch (_: Exception) { null } ?: continue
-
-                    // Parse purse / balance
-                    if (balanceRubles == 0.0 && data.size >= 4) {
-                        val kopecksLE = (data[0].toInt() and 0xFF) or
-                                        ((data[1].toInt() and 0xFF) shl 8) or
-                                        ((data[2].toInt() and 0xFF) shl 16)
-                        val kopecksAlt = (data[1].toInt() and 0xFF) or
-                                         ((data[2].toInt() and 0xFF) shl 8)
-
-                        val val1 = kopecksLE / 100.0
-                        val val2 = kopecksAlt / 100.0
-
-                        if (val1 in 0.01..15000.0) {
-                            balanceRubles = val1
-                            foundPodorozhnik = true
-                        } else if (val2 in 0.01..15000.0) {
-                            balanceRubles = val2
-                            foundPodorozhnik = true
-                        }
-                    }
-
-                    // Parse card number (4 bytes serial)
-                    if (cardNumber.isEmpty() && data.size >= 8) {
-                        val numRaw = ((data[7].toLong() and 0xFFL) shl 24) or
-                                     ((data[6].toLong() and 0xFFL) shl 16) or
-                                     ((data[5].toLong() and 0xFFL) shl 8) or
-                                     (data[4].toLong() and 0xFFL)
-                        if (numRaw > 100000L) {
-                            cardNumber = String.format(Locale.US, "%010d", numRaw % 10000000000L)
-                            foundPodorozhnik = true
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!foundPodorozhnik && readSectors.isEmpty()) {
-            return null
-        }
-
-        // If authenticated with Podorozhnik keys, return Podorozhnik card
-        if (foundPodorozhnik || readSectors.contains(4) || readSectors.contains(5)) {
-            if (cardNumber.isEmpty()) {
-                cardNumber = uidHex.take(10).padEnd(10, '0')
-            }
-            return TransportCard(
-                type = TransportCardType.PODOROZHNIK,
-                balanceRubles = balanceRubles,
-                cardNumber = cardNumber,
-                uid = uidHex,
-                sectorsRead = readSectors
-            )
-        }
-
-        return null
     }
 
     private fun tryReadTroika(mfc: MifareClassic, uidHex: String): TransportCard? {
         if (mfc.sectorCount <= 8) return null
-        val allTroikaKeys = TROIKA_KEYS + STANDARD_KEYS
 
         var auth7 = false
         var auth8 = false
 
-        for (k in allTroikaKeys) {
-            if (!auth7 && authSector(mfc, 7, k)) auth7 = true
-            if (!auth8 && authSector(mfc, 8, k)) auth8 = true
-            if (auth7 && auth8) break
-        }
+        try {
+            auth7 = mfc.authenticateSectorWithKeyA(7, TROIKA_KEY_A_SEC7)
+        } catch (_: Exception) {}
+
+        try {
+            auth8 = mfc.authenticateSectorWithKeyA(8, TROIKA_KEY_A_SEC8)
+        } catch (_: Exception) {}
 
         if (!auth7 && !auth8) return null
 
         var block28: ByteArray? = null
+        var block29: ByteArray? = null
         var block32: ByteArray? = null
 
         if (auth7) {
-            try { block28 = mfc.readBlock(28) } catch (_: Exception) {}
+            try {
+                block28 = mfc.readBlock(28)
+                block29 = mfc.readBlock(29)
+            } catch (_: Exception) {}
         }
+
         if (auth8) {
-            try { block32 = mfc.readBlock(32) } catch (_: Exception) {}
+            try {
+                block32 = mfc.readBlock(32)
+            } catch (_: Exception) {}
+        }
+
+        if (isBlockEmptyOrDummy(block28) && isBlockEmptyOrDummy(block32)) {
+            return null
         }
 
         var balanceRubles = 0.0
-        if (block32 != null && block32.size >= 4) {
+        var foundBalance = false
+
+        // Troika purse balance calculation (1 unit = 2.5 kopecks -> units / 40.0 rubles)
+        if (block32 != null && !isBlockEmptyOrDummy(block32) && block32.size >= 4) {
             val u1 = ((block32[0].toInt() and 0xFF) or ((block32[1].toInt() and 0xFF) shl 8) or ((block32[2].toInt() and 0xFF) shl 16)) shr 4
             val u2 = (block32[1].toInt() and 0xFF) or ((block32[2].toInt() and 0xFF) shl 8)
             val val1 = u1 / 40.0
             val val2 = u2 / 40.0
-            if (val1 in 0.01..10000.0) balanceRubles = val1
-            else if (val2 in 0.01..10000.0) balanceRubles = val2
+
+            if (val1 in 0.01..15000.0) {
+                balanceRubles = val1
+                foundBalance = true
+            } else if (val2 in 0.01..15000.0) {
+                balanceRubles = val2
+                foundBalance = true
+            }
         }
 
-        if (balanceRubles == 0.0 && block28 != null && block28.size >= 4) {
+        if (!foundBalance && block28 != null && !isBlockEmptyOrDummy(block28) && block28.size >= 4) {
             val u1 = ((block28[0].toInt() and 0xFF) or ((block28[1].toInt() and 0xFF) shl 8) or ((block28[2].toInt() and 0xFF) shl 16)) shr 4
             val val1 = u1 / 40.0
-            if (val1 in 0.0..10000.0) balanceRubles = val1
+            if (val1 in 0.01..15000.0) {
+                balanceRubles = val1
+            }
         }
 
         var cardNumber = ""
-        if (block28 != null && block28.size >= 8) {
+        if (block28 != null && block28.size >= 8 && !isBlockEmptyOrDummy(block28)) {
             val numRaw = ((block28[7].toLong() and 0xFFL) shl 24) or
                          ((block28[6].toLong() and 0xFFL) shl 16) or
                          ((block28[5].toLong() and 0xFFL) shl 8) or
@@ -239,6 +157,7 @@ object TransportCardParser {
                 cardNumber = String.format(Locale.US, "%010d", numRaw % 10000000000L)
             }
         }
+
         if (cardNumber.isEmpty()) {
             cardNumber = uidHex.take(10).padEnd(10, '0')
         }
@@ -258,25 +177,24 @@ object TransportCardParser {
 
     private fun tryReadStrelka(mfc: MifareClassic, uidHex: String): TransportCard? {
         if (mfc.sectorCount <= 11) return null
-        val allStrelkaKeys = STRELKA_KEYS + STANDARD_KEYS
 
         var auth11 = false
-        for (k in allStrelkaKeys) {
-            if (authSector(mfc, 11, k)) {
-                auth11 = true
-                break
-            }
-        }
+        try {
+            auth11 = mfc.authenticateSectorWithKeyA(11, STRELKA_KEY_A_SEC11)
+        } catch (_: Exception) {}
+
         if (!auth11) return null
 
         val block44 = try { mfc.readBlock(44) } catch (_: Exception) { null } ?: return null
+        if (isBlockEmptyOrDummy(block44)) return null
 
-        var balanceRubles = 0.0
+        // Strelka balance in kopecks / 100.0
         val kopecks1 = (block44[0].toInt() and 0xFF) or ((block44[1].toInt() and 0xFF) shl 8) or ((block44[2].toInt() and 0xFF) shl 16)
         val kopecks2 = (block44[1].toInt() and 0xFF) or ((block44[2].toInt() and 0xFF) shl 8)
+
         val val1 = kopecks1 / 100.0
         val val2 = kopecks2 / 100.0
-        if (val1 in 0.0..15000.0) balanceRubles = val1 else if (val2 in 0.0..15000.0) balanceRubles = val2
+        val balanceRubles = if (val1 in 0.0..20000.0) val1 else if (val2 in 0.0..20000.0) val2 else 0.0
 
         val numRaw = ((block44[7].toLong() and 0xFFL) shl 24) or
                      ((block44[6].toLong() and 0xFFL) shl 16) or
@@ -295,6 +213,53 @@ object TransportCardParser {
             cardNumber = cardNumber,
             uid = uidHex,
             sectorsRead = listOf(11)
+        )
+    }
+
+    private fun tryReadPodorozhnik(mfc: MifareClassic, uidHex: String): TransportCard? {
+        if (mfc.sectorCount <= 4) return null
+
+        var auth4 = false
+        try {
+            auth4 = mfc.authenticateSectorWithKeyA(4, PODOROZHNIK_KEY_A_SEC4)
+        } catch (_: Exception) {}
+
+        if (!auth4) {
+            try {
+                auth4 = mfc.authenticateSectorWithKeyA(4, PODOROZHNIK_KEY_A_ALT)
+            } catch (_: Exception) {}
+        }
+
+        if (!auth4) return null
+
+        val block16 = try { mfc.readBlock(16) } catch (_: Exception) { null } ?: return null
+        if (isBlockEmptyOrDummy(block16)) return null
+
+        // Balance in kopecks / 100.0 (Little Endian)
+        val kopecks1 = (block16[0].toInt() and 0xFF) or ((block16[1].toInt() and 0xFF) shl 8) or ((block16[2].toInt() and 0xFF) shl 16)
+        val kopecks2 = (block16[1].toInt() and 0xFF) or ((block16[2].toInt() and 0xFF) shl 8)
+
+        val val1 = kopecks1 / 100.0
+        val val2 = kopecks2 / 100.0
+        val balanceRubles = if (val1 in 0.0..20000.0) val1 else if (val2 in 0.0..20000.0) val2 else 0.0
+
+        val cardNumRaw = ((block16[7].toLong() and 0xFFL) shl 24) or
+                         ((block16[6].toLong() and 0xFFL) shl 16) or
+                         ((block16[5].toLong() and 0xFFL) shl 8) or
+                         (block16[4].toLong() and 0xFFL)
+
+        val cardNumber = if (cardNumRaw > 100000L) {
+            String.format(Locale.US, "%010d", cardNumRaw % 10000000000L)
+        } else {
+            uidHex.take(10).padEnd(10, '0')
+        }
+
+        return TransportCard(
+            type = TransportCardType.PODOROZHNIK,
+            balanceRubles = balanceRubles,
+            cardNumber = cardNumber,
+            uid = uidHex,
+            sectorsRead = listOf(4)
         )
     }
 

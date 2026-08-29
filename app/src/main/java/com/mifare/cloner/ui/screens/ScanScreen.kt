@@ -1112,7 +1112,7 @@ private fun TransportCardScannedView(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "сектор ${card.sectorsRead.joinToString(", ")}",
+                            text = card.sectorsRead.joinToString(", "),
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
