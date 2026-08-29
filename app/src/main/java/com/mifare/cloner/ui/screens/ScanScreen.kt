@@ -672,13 +672,14 @@ private fun EmvCardScannedView(
                 }
 
                 // PAN (Card Number)
+                val panLen = card.pan.length
                 Text(
                     text = card.formattedPan,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
-                        fontSize = 19.sp
+                        letterSpacing = if (panLen > 16) 0.5.sp else 2.sp,
+                        fontSize = if (panLen > 16) 15.sp else 19.sp
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1

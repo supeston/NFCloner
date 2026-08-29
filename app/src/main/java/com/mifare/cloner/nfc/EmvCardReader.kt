@@ -388,22 +388,16 @@ object EmvCardReader {
 
     private fun detectScheme(pan: String, aid: String?, label: String?): CardScheme {
         val cleanPan = pan.replace(" ", "").trim()
+        val aidUpper = aid?.uppercase() ?: ""
+        val labelUpper = label?.uppercase() ?: ""
+
         return when {
-            cleanPan.startsWith("2") ||
-            (aid?.startsWith("A000000658", ignoreCase = true) == true) ||
-            (label?.contains("MIR", ignoreCase = true) == true) -> CardScheme.MIR
-
-            cleanPan.startsWith("4") ||
-            (aid?.startsWith("A000000003", ignoreCase = true) == true) -> CardScheme.VISA
-
-            cleanPan.matches(Regex("^(5[1-5]|2[2-7]).*")) ||
-            (aid?.startsWith("A000000004", ignoreCase = true) == true) -> CardScheme.MASTERCARD
-
-            cleanPan.startsWith("62") ||
-            (aid?.startsWith("A000000333", ignoreCase = true) == true) -> CardScheme.UNIONPAY
-
-            cleanPan.startsWith("34") || cleanPan.startsWith("37") -> CardScheme.AMEX
-
+            aidUpper.startsWith("A000000658") || labelUpper.contains("MIR") || cleanPan.startsWith("220") -> CardScheme.MIR
+            aidUpper.startsWith("A000000003") || labelUpper.contains("VISA") || cleanPan.startsWith("4") -> CardScheme.VISA
+            aidUpper.startsWith("A000000004") || labelUpper.contains("MC") || labelUpper.contains("MASTERCARD") || labelUpper.contains("MAESTRO") || cleanPan.matches(Regex("^(5[1-5]|2[2-7]).*")) -> CardScheme.MASTERCARD
+            aidUpper.startsWith("A000000333") || labelUpper.contains("UNIONPAY") || cleanPan.startsWith("62") -> CardScheme.UNIONPAY
+            aidUpper.startsWith("A000000025") || labelUpper.contains("AMEX") || cleanPan.startsWith("34") || cleanPan.startsWith("37") -> CardScheme.AMEX
+            cleanPan.startsWith("2") -> CardScheme.MIR
             else -> CardScheme.UNKNOWN
         }
     }

@@ -65,11 +65,11 @@ fun MifareClonerTheme(
         else -> {
             lightColorScheme(
                 primary = accentTheme.primaryColor,
-                onPrimary = Color(0xFFFFFFFF),
+                onPrimary = Color(0xFF001E2B),
                 primaryContainer = accentTheme.containerColor.copy(alpha = 0.2f),
                 onPrimaryContainer = Color(0xFF001E2B),
                 secondary = accentTheme.primaryColor,
-                onSecondary = Color(0xFFFFFFFF),
+                onSecondary = Color(0xFF001E2B),
                 secondaryContainer = accentTheme.containerColor.copy(alpha = 0.2f),
                 onSecondaryContainer = Color(0xFF1F2328),
                 tertiary = accentTheme.primaryColor,
