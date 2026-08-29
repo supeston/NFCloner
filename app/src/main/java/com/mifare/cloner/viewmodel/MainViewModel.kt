@@ -135,11 +135,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 when (res) {
                     is ReadResult.Success -> {
-                        val cleanUid = res.dump.formattedUid.replace(" ", "")
-                        val dumpToSave = res.dump.copy(title = "UID_$cleanUid")
+                        val cleanUid = res.dump.formattedUid.replace(":", "")
+                        val dumpToSave = res.dump.copy(name = "UID_$cleanUid")
                         storage.saveDump(dumpToSave)
                         _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
-                        setFeedbackMessage("дамп сохранен: ${dumpToSave.title}")
+                        setFeedbackMessage("дамп сохранен: ${dumpToSave.name}")
                     }
                     is ReadResult.Failure -> {
                         _feedbackEvents.emit(FeedbackType.ERROR)
