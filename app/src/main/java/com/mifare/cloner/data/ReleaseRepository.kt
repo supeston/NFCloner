@@ -29,11 +29,15 @@ data class ReleaseHistoryItem(
 object ReleaseRepository {
 
     fun fetchAllReleases(): List<ReleaseHistoryItem> {
-        val url = URL("https://api.github.com/repos/supeston/NFCloner/releases")
+        val timestamp = System.currentTimeMillis()
+        val url = URL("https://api.github.com/repos/supeston/NFCloner/releases?_t=$timestamp")
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
+        connection.useCaches = false
         connection.setRequestProperty("User-Agent", "NFCloner-App")
         connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+        connection.setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate")
+        connection.setRequestProperty("Pragma", "no-cache")
         connection.connectTimeout = 8000
         connection.readTimeout = 8000
 
@@ -87,6 +91,11 @@ object ReleaseRepository {
             )
         }
 
+        // Sort descending by semantic version so newest is always first
+        list.sortWith { a, b ->
+            compareVersions(b.tagName.removePrefix("v").trim(), a.tagName.removePrefix("v").trim())
+        }
+
         return list
     }
 
@@ -104,7 +113,10 @@ object ReleaseRepository {
             val url = URL(currentUrl)
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
+            connection.useCaches = false
             connection.setRequestProperty("User-Agent", "NFCloner-App")
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate")
+            connection.setRequestProperty("Pragma", "no-cache")
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
             connection.instanceFollowRedirects = false
@@ -135,10 +147,18 @@ object ReleaseRepository {
         }
 
         val fileLength = connection.contentLength.toLong()
-        val apkFile = File(context.cacheDir, "NFCloner_update.apk")
-        if (apkFile.exists()) {
-            apkFile.delete()
-        }
+
+        // Clean up previous update apks in cache
+        try {
+            context.cacheDir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("NFCloner_") && file.name.endsWith(".apk")) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+
+        val cleanTag = downloadUrl.substringAfterLast("/").substringBeforeLast(".")
+        val apkFile = File(context.cacheDir, "NFCloner_${cleanTag}_${System.currentTimeMillis()}.apk")
 
         val input = BufferedInputStream(connection.inputStream)
         val output = FileOutputStream(apkFile)
@@ -173,7 +193,10 @@ object ReleaseRepository {
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
         }
 
         context.startActivity(intent)
