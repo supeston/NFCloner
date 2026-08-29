@@ -10,12 +10,14 @@ import com.mifare.cloner.data.DumpStorage
 import com.mifare.cloner.data.MifareDump
 import com.mifare.cloner.data.QrCodeHelper
 import com.mifare.cloner.data.ScanMode
+import com.mifare.cloner.feedback.FeedbackType
 import com.mifare.cloner.nfc.ClonerOperationState
 import com.mifare.cloner.nfc.MifareGen2Cloner
 import com.mifare.cloner.nfc.ReadResult
 import com.mifare.cloner.nfc.WriteResult
 import com.mifare.cloner.ui.theme.AccentTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -25,12 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-
-sealed class HapticEvent {
-    object ReadSuccess : HapticEvent()
-    object WriteSuccess : HapticEvent()
-    object Error : HapticEvent()
-}
 
 data class MainUiState(
     val selectedTab: Int = 0,
@@ -56,8 +52,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    private val _hapticEvents = MutableSharedFlow<HapticEvent>(extraBufferCapacity = 1)
-    val hapticEvents: SharedFlow<HapticEvent> = _hapticEvents.asSharedFlow()
+    private val _feedbackEvents = MutableSharedFlow<FeedbackType>(extraBufferCapacity = 1)
+    val feedbackEvents: SharedFlow<FeedbackType> = _feedbackEvents.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -111,10 +107,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onTagDiscovered(tag: Tag) {
+        val currentTab = _uiState.value.selectedTab
+        // Tab 2 (Настройки) & Tab 3 (Инфо): NFC is completely ignored
+        if (currentTab == 2 || currentTab == 3) {
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val currentState = _uiState.value.clonerState
             val currentSettings = _uiState.value.settings
 
+            // TAB 1: «СОХРАН» (Только быстрое чтение и сохранение в базу)
+            if (currentTab == 1) {
+                val techList = tag.techList.toList()
+                val isMifare = techList.any { it.contains("MifareClassic", ignoreCase = true) }
+                if (!isMifare) {
+                    _feedbackEvents.emit(FeedbackType.ERROR)
+                    setFeedbackMessage("метка не является MIFARE Classic")
+                    return@launch
+                }
+
+                val res = MifareGen2Cloner.readOriginalTag(
+                    tag = tag,
+                    scanMode = currentSettings.scanMode,
+                    customSector = currentSettings.customSector,
+                    keysList = currentSettings.keysList
+                )
+                when (res) {
+                    is ReadResult.Success -> {
+                        val cleanUid = res.dump.formattedUid.replace(" ", "")
+                        val dumpToSave = res.dump.copy(title = "UID_$cleanUid")
+                        storage.saveDump(dumpToSave)
+                        _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
+                        setFeedbackMessage("дамп сохранен: ${dumpToSave.title}")
+                    }
+                    is ReadResult.Failure -> {
+                        _feedbackEvents.emit(FeedbackType.ERROR)
+                        setFeedbackMessage(res.message)
+                    }
+                }
+                return@launch
+            }
+
+            // TAB 0: «СКАН» (Полный цикл клонирования: скан -> ожидание Gen2 -> запись -> автосброс)
             when (currentState) {
                 is ClonerOperationState.IdleWaitOriginal,
                 is ClonerOperationState.OperationError,
@@ -131,7 +166,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val transportRes = com.mifare.cloner.nfc.TransportCardParser.readTransportCard(tag)
                         when (transportRes) {
                             is com.mifare.cloner.nfc.TransportCardReadResult.Success -> {
-                                _hapticEvents.emit(HapticEvent.ReadSuccess)
+                                _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
                                 _uiState.update {
                                     it.copy(
                                         clonerState = ClonerOperationState.TransportCardScanned(transportRes.card),
@@ -153,7 +188,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val emvRes = com.mifare.cloner.nfc.EmvCardReader.readEmvCard(tag)
                         when (emvRes) {
                             is com.mifare.cloner.nfc.EmvReadResult.Success -> {
-                                _hapticEvents.emit(HapticEvent.ReadSuccess)
+                                _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
                                 _uiState.update {
                                     it.copy(
                                         clonerState = ClonerOperationState.EmvCardScanned(emvRes.card),
@@ -164,7 +199,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             is com.mifare.cloner.nfc.EmvReadResult.Failure -> {
                                 if (!isMifare) {
-                                    _hapticEvents.emit(HapticEvent.Error)
+                                    _feedbackEvents.emit(FeedbackType.ERROR)
                                     _uiState.update {
                                         it.copy(clonerState = ClonerOperationState.OperationError(emvRes.message))
                                     }
@@ -186,7 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     when (res) {
                         is ReadResult.Success -> {
                             storage.saveDump(res.dump)
-                            _hapticEvents.emit(HapticEvent.ReadSuccess)
+                            _feedbackEvents.emit(FeedbackType.READ_SUCCESS)
                             _uiState.update {
                                 it.copy(
                                     clonerState = ClonerOperationState.ReadyToWrite(res.dump),
@@ -195,7 +230,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         is ReadResult.Failure -> {
-                            _hapticEvents.emit(HapticEvent.Error)
+                            _feedbackEvents.emit(FeedbackType.ERROR)
                             _uiState.update {
                                 it.copy(clonerState = ClonerOperationState.OperationError(res.message))
                             }
@@ -215,16 +250,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     when (res) {
                         is WriteResult.Success -> {
-                            _hapticEvents.emit(HapticEvent.WriteSuccess)
+                            _feedbackEvents.emit(FeedbackType.WRITE_SUCCESS)
                             _uiState.update {
                                 it.copy(
                                     clonerState = ClonerOperationState.WriteSuccess(res.dump),
                                     feedbackMessage = "метка успешно скопирована"
                                 )
                             }
+                            // Auto-reset after 3 seconds
+                            delay(3000)
+                            if (_uiState.value.clonerState is ClonerOperationState.WriteSuccess) {
+                                _uiState.update { it.copy(clonerState = ClonerOperationState.IdleWaitOriginal) }
+                            }
                         }
                         is WriteResult.Failure -> {
-                            _hapticEvents.emit(HapticEvent.Error)
+                            _feedbackEvents.emit(FeedbackType.ERROR)
                             _uiState.update {
                                 it.copy(
                                     clonerState = ClonerOperationState.OperationError(

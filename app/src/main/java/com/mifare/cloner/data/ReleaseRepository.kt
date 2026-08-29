@@ -12,7 +12,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
-const val CURRENT_APP_VERSION = "1.1.0"
+const val CURRENT_APP_VERSION = "1.2.0"
 
 data class ReleaseHistoryItem(
     val tagName: String,

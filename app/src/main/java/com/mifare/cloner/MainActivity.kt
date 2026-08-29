@@ -38,6 +38,8 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,22 +61,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import com.mifare.cloner.feedback.FeedbackManager
 import com.mifare.cloner.nfc.NfcManager
 import com.mifare.cloner.ui.screens.DumpsScreen
 import com.mifare.cloner.ui.screens.InfoScreen
 import com.mifare.cloner.ui.screens.ScanScreen
 import com.mifare.cloner.ui.screens.SettingsScreen
 import com.mifare.cloner.ui.theme.MifareClonerTheme
-import com.mifare.cloner.viewmodel.HapticEvent
 import com.mifare.cloner.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -82,11 +82,13 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
     private lateinit var nfcManager: NfcManager
+    private lateinit var feedbackManager: FeedbackManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        feedbackManager = FeedbackManager(this)
         nfcManager = NfcManager(this, lifecycleScope)
 
         lifecycleScope.launch {
@@ -99,32 +101,10 @@ class MainActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsState()
             val nfcStatus by nfcManager.status.collectAsState()
             val snackbarHostState = remember { SnackbarHostState() }
-            val haptic = LocalHapticFeedback.current
-            val context = LocalContext.current
 
             LaunchedEffect(Unit) {
-                viewModel.hapticEvents.collect { event ->
-                    when (event) {
-                        is HapticEvent.ReadSuccess -> {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        is HapticEvent.WriteSuccess -> {
-                            try {
-                                val vibrator = context.getSystemService(Vibrator::class.java)
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 100, 80, 180), -1))
-                                } else {
-                                    @Suppress("DEPRECATION")
-                                    vibrator?.vibrate(250)
-                                }
-                            } catch (_: Exception) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
-                        }
-                        is HapticEvent.Error -> {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                    }
+                viewModel.feedbackEvents.collect { event ->
+                    feedbackManager.triggerFeedback(event)
                 }
             }
 
@@ -170,6 +150,11 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         nfcManager.pause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        feedbackManager.release()
     }
 }
 
@@ -270,11 +255,22 @@ private fun MainScaffoldContent(
                     selected = uiState.selectedTab == 3,
                     onClick = { viewModel.selectTab(3) },
                     icon = {
-                        Icon(
-                            imageVector = if (uiState.selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
-                            contentDescription = "инфо",
-                            modifier = Modifier.size(22.dp)
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (uiState.availableUpdate != null) {
+                                    Badge(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(8.dp)
+                                    )
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
+                                contentDescription = "инфо",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     },
                     label = {
                         Text(
