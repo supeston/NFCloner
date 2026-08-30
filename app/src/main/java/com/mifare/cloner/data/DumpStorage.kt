@@ -17,8 +17,8 @@ data class AppSettings(
     val keysList: List<String> = listOf("FFFFFFFFFFFF"),
     val themeMode: AppThemeMode = AppThemeMode.DARK,
     val accentTheme: AccentTheme = AccentTheme.CYAN,
-    val emvScanEnabled: Boolean = true,
-    val transportCardsEnabled: Boolean = true
+    val emvScanEnabled: Boolean = false,
+    val transportCardsEnabled: Boolean = false
 ) {
     val keysText: String
         get() = keysList.joinToString("\n")
@@ -89,8 +89,8 @@ class DumpStorage(private val context: Context) {
                 keysList = keys,
                 themeMode = themeMode,
                 accentTheme = accentTheme,
-                emvScanEnabled = json.optBoolean("emvScanEnabled", true),
-                transportCardsEnabled = json.optBoolean("transportCardsEnabled", true)
+                emvScanEnabled = json.optBoolean("emvScanEnabled", false),
+                transportCardsEnabled = json.optBoolean("transportCardsEnabled", false)
             )
         } catch (e: Exception) {
             e.printStackTrace()
